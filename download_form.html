@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CDN 文件下载器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        form {
+            margin-top: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        select, input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            height: 150px;
+        }
+        input[type="submit"] {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #008CBA;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #007B9A;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CDN 文件下载器</h1>
+        <form action="download_script.php" method="post">
+            <label for="cdn-select">选择 CDN 基础 URL：</label>
+            <select id="cdn-select" name="base_url">
+                <option value="">-- 请选择 --</option>
+                <option value="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/">ByteDance CDN</option>
+                <option value="https://cdn.jsdelivr.net/npm/">jsDelivr</option>
+                <option value="https://cdnjs.cloudflare.com/ajax/libs/">Cloudflare CDNJS</option>
+                <option value="https://unpkg.com/">UNPKG</option>
+                <option value="custom">自定义 CDN 基础 URL</option>
+            </select>
+
+            <div id="custom-url-container" style="display:none;">
+                <label for="custom-url">自定义 CDN 基础 URL：</label>
+                <input type="text" id="custom-url" name="custom_base_url" placeholder="输入自定义的 CDN 基础 URL">
+            </div>
+
+            <label for="file-list">文件列表（每行一个）：</label>
+            <textarea id="file-list" name="file_list" placeholder="例如：
+jquery/3.5.1/jquery.min.js
+bootstrap/4.5.3/css/bootstrap.min.css
+vue/2.6.12/vue.min.js"></textarea>
+
+            <input type="submit" value="下载文件">
+        </form>
+        <p>
+            <a href="browse_cdn.php" class="button">浏览 CDN 文件</a>
+        </p>
+    </div>
+
+    <script>
+        document.getElementById('cdn-select').addEventListener('change', function() {
+            var customUrlContainer = document.getElementById('custom-url-container');
+            if (this.value === 'custom') {
+                customUrlContainer.style.display = 'block';
+            } else {
+                customUrlContainer.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
