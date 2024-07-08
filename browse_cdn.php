@@ -33,7 +33,7 @@ function getDirContents($dir, $base = '') {
             $result = array_merge($result, getDirContents($path, $relativePath));
         } else {
             $result[] = [
-                'type' => 'file',
+                'type' => strtoupper(pathinfo($file, PATHINFO_EXTENSION)),
                 'name' => $file,
                 'path' => $relativePath,
                 'size' => filesize($path),
@@ -47,14 +47,6 @@ function getDirContents($dir, $base = '') {
 
 // 获取文件列表
 $files = getDirContents($cdn_base_path);
-
-// 排序函数
-function sortFiles($a, $b) {
-    return strcmp($a['path'], $b['path']);
-}
-
-// 对文件列表进行排序
-usort($files, 'sortFiles');
 
 // 获取文件类型的 emoji
 function getFileEmoji($filename) {
@@ -115,6 +107,10 @@ function getFileEmoji($filename) {
         th {
             background-color: #4CAF50;
             color: white;
+            cursor: pointer;
+        }
+        th:hover {
+            background-color: #45a049;
         }
         tr:nth-child(even) {
             background-color: #f2f2f2;
@@ -156,24 +152,26 @@ function getFileEmoji($filename) {
         <table id="fileTable">
             <thead>
                 <tr>
-                    <th><input type="checkbox" id="selectAll"></th>
-                    <th>文件名</th>
-                    <th>路径</th>
-                    <th>大小</th>
-                    <th>修改时间</th>
+                    <th data-sort="name">文件名</th>
+                    <th data-sort="type">类型</th>
+                    <th data-sort="path">路径</th>
+                    <th data-sort="size">大小</th>
+                    <th data-sort="modified">修改时间</th>
+                    <th><input type="checkbox" id="selectAll"> 选择</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($files as $file): ?>
                 <tr>
-                    <td><input type="checkbox" name="files[]" value="<?php echo htmlspecialchars($file['path']); ?>"></td>
                     <td>
                         <?php echo getFileEmoji($file['name']); ?>
                         <a href="<?php echo $cdn_url_base . $file['path']; ?>" target="_blank"><?php echo htmlspecialchars($file['name']); ?></a>
                     </td>
+                    <td><?php echo htmlspecialchars($file['type']); ?></td>
                     <td><?php echo htmlspecialchars($file['path']); ?></td>
-                    <td><?php echo number_format($file['size'] / 1024, 2) . ' KB'; ?></td>
-                    <td><?php echo date('Y-m-d H:i:s', $file['modified']); ?></td>
+                    <td data-size="<?php echo $file['size']; ?>"><?php echo number_format($file['size'] / 1024, 2) . ' KB'; ?></td>
+                    <td data-modified="<?php echo $file['modified']; ?>"><?php echo date('Y-m-d H:i:s', $file['modified']); ?></td>
+                    <td><input type="checkbox" name="files[]" value="<?php echo htmlspecialchars($file['path']); ?>"></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -190,7 +188,7 @@ function getFileEmoji($filename) {
         var tableRows = document.querySelectorAll('#fileTable tbody tr');
         
         tableRows.forEach(function(row) {
-            var fileName = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+            var fileName = row.querySelector('td:first-child').textContent.toLowerCase();
             var filePath = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
             
             if (fileName.includes(searchValue) || filePath.includes(searchValue)) {
@@ -218,6 +216,43 @@ function getFileEmoji($filename) {
                 e.preventDefault();
             }
         }
+    });
+
+    // 排序功能
+    document.querySelectorAll('#fileTable th[data-sort]').forEach(function(th) {
+        th.addEventListener('click', function() {
+            var sortBy = this.dataset.sort;
+            var tbody = document.querySelector('#fileTable tbody');
+            var rows = Array.from(tbody.querySelectorAll('tr'));
+
+            rows.sort(function(a, b) {
+                var aValue = a.querySelector('td[data-' + sortBy + ']') 
+                    ? a.querySelector('td[data-' + sortBy + ']').dataset[sortBy] 
+                    : a.children[th.cellIndex].textContent.toLowerCase();
+                var bValue = b.querySelector('td[data-' + sortBy + ']')
+                    ? b.querySelector('td[data-' + sortBy + ']').dataset[sortBy]
+                    : b.children[th.cellIndex].textContent.toLowerCase();
+
+                if (sortBy === 'size' || sortBy === 'modified') {
+                    return Number(aValue) - Number(bValue);
+                } else {
+                    return aValue.localeCompare(bValue);
+                }
+            });
+
+            if (this.classList.contains('asc')) {
+                rows.reverse();
+                this.classList.remove('asc');
+                this.classList.add('desc');
+            } else {
+                this.classList.remove('desc');
+                this.classList.add('asc');
+            }
+
+            rows.forEach(function(row) {
+                tbody.appendChild(row);
+            });
+        });
     });
     </script>
 </body>
