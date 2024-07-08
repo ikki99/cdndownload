@@ -6,6 +6,7 @@ set_time_limit(300);
 $success_count = 0;
 $fail_count = 0;
 $fail_list = [];
+$downloaded_files = []; // 用于跟踪已下载的文件，防止重复下载
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // 获取基础 URL
@@ -22,7 +23,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $local_base_path = 'cdn/';
 
     // 函数：下载文件并保存到本地
-    function downloadFile($url, $local_path) {
+    function downloadFile($url, $local_path, $base_url) {
+        global $downloaded_files, $success_count, $fail_count, $fail_list;
+        
+        // 移除文件名中的参数部分
+        $local_path = preg_replace('/([^?#]+).*/', '$1', $local_path);
+        
+        // 检查文件是否已经下载过
+        if (isset($downloaded_files[$local_path])) {
+            return true;
+        }
+
         $dir = dirname($local_path);
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
@@ -31,9 +42,60 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $content = @file_get_contents($url);
         if ($content !== false) {
             file_put_contents($local_path, $content);
+            $downloaded_files[$local_path] = true;
+            $success_count++;
+            
+            // 检查文件类型
+            $ext = strtolower(pathinfo($local_path, PATHINFO_EXTENSION));
+            if ($ext == 'css') {
+                processCSS($content, $local_path, $base_url);
+            } elseif ($ext == 'js') {
+                processJS($content, $local_path, $base_url);
+            }
+            
             return true;
         } else {
+            $fail_count++;
+            $fail_list[] = $url;
             return false;
+        }
+    }
+
+    // 处理 CSS 文件
+    function processCSS($content, $file_path, $base_url) {
+        global $local_base_path;
+        // 匹配 CSS 中的 url() 引用
+        preg_match_all('/url\([\'"]?([^\'"]+)[\'"]?\)/i', $content, $matches);
+        foreach ($matches[1] as $resource) {
+            if (!preg_match('/^(https?:)?\/\//i', $resource)) {
+                $resource_url = $base_url . dirname(str_replace($local_base_path, '', $file_path)) . '/' . $resource;
+                $resource_path = dirname($file_path) . '/' . $resource;
+                downloadFile($resource_url, $resource_path, $base_url);
+            }
+        }
+        
+        // 匹配 @import 规则
+        preg_match_all('/@import\s+[\'"]([^\'"]+)[\'"]/i', $content, $imports);
+        foreach ($imports[1] as $import) {
+            if (!preg_match('/^(https?:)?\/\//i', $import)) {
+                $import_url = $base_url . dirname(str_replace($local_base_path, '', $file_path)) . '/' . $import;
+                $import_path = dirname($file_path) . '/' . $import;
+                downloadFile($import_url, $import_path, $base_url);
+            }
+        }
+    }
+
+    // 处理 JS 文件
+    function processJS($content, $file_path, $base_url) {
+        global $local_base_path;
+        // 匹配 JS 中可能的资源引用（如 .map 文件）
+        if (preg_match('/\/\/[#@]\s*sourceMappingURL=(.+)/', $content, $match)) {
+            $map_file = $match[1];
+            if (!preg_match('/^(https?:)?\/\//i', $map_file)) {
+                $map_url = $base_url . dirname(str_replace($local_base_path, '', $file_path)) . '/' . $map_file;
+                $map_path = dirname($file_path) . '/' . $map_file;
+                downloadFile($map_url, $map_path, $base_url);
+            }
         }
     }
 
@@ -43,12 +105,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if (!empty($file)) {
             $url = $base_url . $file;
             $local_path = $local_base_path . $file;
-            if (downloadFile($url, $local_path)) {
-                $success_count++;
-            } else {
-                $fail_count++;
-                $fail_list[] = $file;
-            }
+            downloadFile($url, $local_path, $base_url);
         }
     }
 }
@@ -60,49 +117,88 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>下载结果</title>
-    <style>
+  <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --danger-color: #e74c3c;
+            --text-color: #333;
+            --bg-color: #f4f4f4;
+        }
+        
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
             line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-color);
             margin: 0;
             padding: 20px;
-            background-color: #f4f4f4;
         }
+        
         .container {
             max-width: 800px;
             margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
+        
         h1 {
-            color: #333;
+            color: var(--primary-color);
             text-align: center;
+            margin-bottom: 30px;
         }
+        
         .summary {
+            background-color: #e8f4fd;
+            border-left: 5px solid var(--primary-color);
+            padding: 15px;
             margin-bottom: 20px;
-            padding: 10px;
-            background-color: #e7f3fe;
-            border-left: 5px solid #2196F3;
+            border-radius: 4px;
         }
+        
+        .summary p {
+            margin: 10px 0;
+            font-size: 18px;
+        }
+        
         .fail-list {
-            background-color: #fff3cd;
-            border-left: 5px solid #ffc107;
-            padding: 10px;
+            background-color: #fde8e8;
+            border-left: 5px solid var(--danger-color);
+            padding: 15px;
             margin-bottom: 20px;
+            border-radius: 4px;
         }
+        
+        .fail-list h3 {
+            color: var(--danger-color);
+            margin-top: 0;
+        }
+        
+        .fail-list ul {
+            padding-left: 20px;
+        }
+        
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
         .button {
             display: inline-block;
             padding: 10px 20px;
-            background-color: #4CAF50;
+            background-color: var(--secondary-color);
             color: white;
             text-decoration: none;
             border-radius: 4px;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s ease;
         }
+        
         .button:hover {
-            background-color: #45a049;
+            background-color: #27ae60;
         }
     </style>
 </head>
@@ -112,7 +208,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         <?php if ($_SERVER["REQUEST_METHOD"] == "POST"): ?>
             <div class="summary">
-                <p>总共尝试下载: <?php echo $success_count + $fail_count; ?> 个文件</p>
+                <p>总共下载: <?php echo $success_count + $fail_count; ?> 个文件（包括附加文件）</p>
                 <p>成功下载: <?php echo $success_count; ?> 个文件</p>
                 <p>下载失败: <?php echo $fail_count; ?> 个文件</p>
             </div>
@@ -133,10 +229,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <?php endif; ?>
 
         <p>
-              <a href="browse_cdn.php" class="button">浏览 CDN 文件</a>&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;  &nbsp;&nbsp;   
+            <a href="browse_cdn.php" class="button">浏览 CDN 文件</a>&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;  &nbsp;&nbsp;   
             <a href="download_form.html" class="button">返回下载页面</a>
-            
-        
         </p>
     </div>
 </body>
